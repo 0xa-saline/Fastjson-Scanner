@@ -40,7 +40,12 @@ POST /
 
 当导入数据包后，在burp内可以看到FastjsonScanner这个窗口，代表导入成功，当探测成功后，会在其中显示对应的数据包以及参数：
 
-![second](https://s1.ax1x.com/2020/03/29/GEawDO.png)
+![image](https://user-images.githubusercontent.com/14137698/86531657-b7e93380-bef5-11ea-91b7-3f4a87929694.png)
+
+![image](https://user-images.githubusercontent.com/14137698/86531663-c9cad680-bef5-11ea-95f7-c57bd665d5ff.png)
+
+![image](https://user-images.githubusercontent.com/14137698/86531675-dfd89700-bef5-11ea-9987-46ee6c08efda.png)
+
 
 
 ### 修改记录
