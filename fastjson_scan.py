@@ -106,6 +106,7 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                 #analyze_request = self._helpers.analyzeRequest(service,baseRequestResponse.getRequest())
                 self._lock.acquire()
                 row = self._log.size()
+                #  have some wrong with baseRequestResponse && analyze_againRes
                 self._log.add(LogEntry(self.id,info,baseRequestResponse,param,url))
                 self.fireTableRowsInserted(row, row)
                 self._lock.release()
