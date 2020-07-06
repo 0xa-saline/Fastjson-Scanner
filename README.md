@@ -55,6 +55,9 @@ POST /
 
 ![image](https://user-images.githubusercontent.com/14137698/86531675-dfd89700-bef5-11ea-9987-46ee6c08efda.png)
 
+报错的模式
+
+![image](https://user-images.githubusercontent.com/14137698/86548174-03d7bf00-bf6e-11ea-869e-c54577cfdf6d.png)
 
 
 ### 修改记录
