@@ -5,6 +5,7 @@
 使用的poc如下：
 
 ```
+            '''{"rand":{"@type":"hello","val":"''',
             """{"rand":{"@type":"java.net.InetAddress","val":"dnslog"}}""",
             """{"rand":{"@type":"java.net.Inet4Address","val":"dnslog"}}""",
             """{"rand":{"@type":"java.net.Inet6Address","val":"dnslog"}}""",
@@ -65,3 +66,5 @@ POST /
 3. 输出检测结果
 
 4. 在某些场景下强行改变get为post请求
+
+5. 添加一个报错的模式
